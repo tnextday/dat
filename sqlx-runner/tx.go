@@ -52,6 +52,9 @@ func WrapSqlxTx(tx *sqlx.Tx) *Tx {
 func (db *DB) Begin() (*Tx, error) {
 	tx, err := db.DB.Beginx()
 	if err != nil {
+		if dat.Strict {
+			logger.Fatal("Could not create transaction")
+		}
 		return nil, logger.Error("begin.error", err)
 	}
 	logger.Debug("begin tx")

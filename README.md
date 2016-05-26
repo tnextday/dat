@@ -573,7 +573,6 @@ For multiple operations, create a `Tx` transaction.
 __`defer Tx.AutoCommit()` or `defer Tx.AutoRollback()` MUST be called__
 
 ```go
-
 func PostsIndex(rw http.ResponseWriter, r *http.Request) {
     tx, _ := DB.Begin()
     defer tx.AutoRollback()
@@ -813,4 +812,3 @@ for more details and SQL injection.
 ## LICENSE
 
 [The MIT License (MIT)](https://github.com/mgutz/dat/blob/master/LICENSE)
-

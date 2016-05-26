@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	guid "github.com/satori/go.uuid"
 	"gopkg.in/mgutz/dat.v1"
 	"gopkg.in/mgutz/dat.v1/kvs"
 )
@@ -80,12 +81,41 @@ func logExecutionTime(start time.Time, sql string, args []interface{}) {
 	}
 }
 
-// Exec executes the query built by builder.
+type execResult struct {
+	result sql.Result
+	err    error
+}
+
 func exec(execer *Execer) (sql.Result, error) {
-	fullSQL, args, err := execer.builder.Interpolate()
+	if execer.timeout == 0 {
+		return execFn(execer)
+	}
+
+	ch := make(chan bool, 1)
+	var result sql.Result
+	var err error
+	go func() {
+		result, err = execFn(execer)
+		ch <- true
+	}()
+	for {
+		select {
+		case <-time.After(execer.timeout):
+			//logger.Error("timed out!!!", "timeout", execer.timeout)
+			execer.Cancel()
+			return nil, dat.ErrTimedout
+		case <-ch:
+			//logger.Error("doexec completed")
+			return result, err
+		}
+	}
+}
+
+// doexec executes the query built by builder.
+func execFn(execer *Execer) (sql.Result, error) {
+	fullSQL, args, err := execer.Interpolate()
 	if err != nil {
-		logger.Error("exec.10", "err", err, "sql", fullSQL)
-		return nil, err
+		return nil, logger.Error("execFn.10", "err", err, "sql", fullSQL)
 	}
 	defer logExecutionTime(time.Now(), fullSQL, args)
 
@@ -96,15 +126,59 @@ func exec(execer *Execer) (sql.Result, error) {
 		result, err = execer.database.Exec(fullSQL, args...)
 	}
 	if err != nil {
-		return nil, logSQLError(err, "exec.30", fullSQL, args)
+		return nil, logSQLError(err, "execFn.30", fullSQL, args)
 	}
 
 	return result, nil
 }
 
-// Query delegates to the internal runner's Query.
+// execSQL executes SQL. Do not add timeout logic here since this is called
+// when a timeout occurs.
+func execSQL(execer *Execer, fullSQL string, args []interface{}) (sql.Result, error) {
+	defer logExecutionTime(time.Now(), fullSQL, args)
+
+	var result sql.Result
+	var err error
+	if args == nil {
+		result, err = execer.database.Exec(fullSQL)
+	} else {
+		result, err = execer.database.Exec(fullSQL, args...)
+	}
+	if err != nil {
+		return nil, logSQLError(err, "execSQL.30", fullSQL, args)
+	}
+
+	return result, nil
+}
+
 func query(execer *Execer) (*sqlx.Rows, error) {
-	fullSQL, args, err := execer.builder.Interpolate()
+	if execer.timeout == 0 {
+		return queryFn(execer)
+	}
+
+	ch := make(chan bool, 1)
+	var rows *sqlx.Rows
+	var err error
+	go func() {
+		rows, err = queryFn(execer)
+		ch <- true
+	}()
+	for {
+		select {
+		case <-time.After(execer.timeout):
+			//logger.Error("timed out!!!", "timeout", execer.timeout)
+			execer.Cancel()
+			return nil, dat.ErrTimedout
+		case <-ch:
+			//logger.Error("doexec completed")
+			return rows, err
+		}
+	}
+}
+
+// Query delegates to the internal runner's Query.
+func queryFn(execer *Execer) (*sqlx.Rows, error) {
+	fullSQL, args, err := execer.Interpolate()
 	if err != nil {
 		return nil, err
 	}
@@ -117,17 +191,41 @@ func query(execer *Execer) (*sqlx.Rows, error) {
 		rows, err = execer.database.Queryx(fullSQL, args...)
 	}
 	if err != nil {
-		return nil, logSQLError(err, "query", fullSQL, args)
+		return nil, logSQLError(err, "queryFn.30", fullSQL, args)
 	}
 
 	return rows, nil
+}
+
+func queryScalar(execer *Execer, destinations ...interface{}) error {
+	if execer.timeout == 0 {
+		return queryScalarFn(execer, destinations)
+	}
+
+	ch := make(chan bool, 1)
+	var err error
+	go func() {
+		err = queryScalarFn(execer, destinations)
+		ch <- true
+	}()
+	for {
+		select {
+		case <-time.After(execer.timeout):
+			//logger.Error("timed out!!!", "timeout", execer.timeout)
+			execer.Cancel()
+			return dat.ErrTimedout
+		case <-ch:
+			//logger.Error("doexec completed")
+			return err
+		}
+	}
 }
 
 // QueryScan executes the query in builder and loads the resulting data into
 // one or more destinations.
 //
 // Returns ErrNotFound if no value was found, and it was therefore not set.
-func queryScalar(execer *Execer, destinations ...interface{}) error {
+func queryScalarFn(execer *Execer, destinations []interface{}) error {
 	fullSQL, args, blob, err := cacheOrSQL(execer)
 	if err != nil {
 		return err
@@ -150,32 +248,54 @@ func queryScalar(execer *Execer, destinations ...interface{}) error {
 		rows, err = execer.database.Queryx(fullSQL, args...)
 	}
 	if err != nil {
-		return logSQLError(err, "QueryScalar.load_value.query", fullSQL, args)
+		return logSQLError(err, "queryScalar.load_value.query", fullSQL, args)
 	}
 
 	defer rows.Close()
 	if rows.Next() {
 		err = rows.Scan(destinations...)
 		if err != nil {
-			return logSQLError(err, "QueryScalar.load_value.scan", fullSQL, args)
+			return logSQLError(err, "queryScalar.load_value.scan", fullSQL, args)
 		}
-
 		setCache(execer, destinations, dtStruct)
-
 		return nil
 	}
 	if err := rows.Err(); err != nil {
-		return logSQLError(err, "QueryScalar.load_value.rows_err", fullSQL, args)
+		return logSQLError(err, "queryScalar.load_value.rows_err", fullSQL, args)
 	}
 
 	return dat.ErrNotFound
+}
+
+func querySlice(execer *Execer, dest interface{}) error {
+	if execer.timeout == 0 {
+		return querySliceFn(execer, dest)
+	}
+
+	ch := make(chan bool, 1)
+	var err error
+	go func() {
+		err = querySliceFn(execer, dest)
+		ch <- true
+	}()
+	for {
+		select {
+		case <-time.After(execer.timeout):
+			//logger.Error("timed out!!!", "timeout", execer.timeout)
+			execer.Cancel()
+			return dat.ErrTimedout
+		case <-ch:
+			//logger.Error("doexec completed")
+			return err
+		}
+	}
 }
 
 // QuerySlice executes the query in builder and loads the resulting data into a
 // slice of primitive values
 //
 // Returns ErrNotFound if no value was found, and it was therefore not set.
-func querySlice(execer *Execer, dest interface{}) error {
+func querySliceFn(execer *Execer, dest interface{}) error {
 	// Validate the dest and reflection values we need
 
 	// This must be a pointer to a slice
@@ -251,11 +371,35 @@ func querySlice(execer *Execer, dest interface{}) error {
 	return nil
 }
 
+func queryStruct(execer *Execer, dest interface{}) error {
+	if execer.timeout == 0 {
+		return queryStructFn(execer, dest)
+	}
+
+	ch := make(chan bool, 1)
+	var err error
+	go func() {
+		err = queryStructFn(execer, dest)
+		ch <- true
+	}()
+	for {
+		select {
+		case <-time.After(execer.timeout):
+			//logger.Error("timed out!!!", "timeout", execer.timeout)
+			execer.Cancel()
+			return dat.ErrTimedout
+		case <-ch:
+			//logger.Error("doexec completed")
+			return err
+		}
+	}
+}
+
 // QueryStruct executes the query in builder and loads the resulting data into
 // a struct dest must be a pointer to a struct
 //
 // Returns ErrNotFound if nothing was found
-func queryStruct(execer *Execer, dest interface{}) error {
+func queryStructFn(execer *Execer, dest interface{}) error {
 	fullSQL, args, blob, err := cacheOrSQL(execer)
 	if err != nil {
 		return err
@@ -285,12 +429,36 @@ func queryStruct(execer *Execer, dest interface{}) error {
 	return nil
 }
 
+func queryStructs(execer *Execer, dest interface{}) error {
+	if execer.timeout == 0 {
+		return queryStructsFn(execer, dest)
+	}
+
+	ch := make(chan bool, 1)
+	var err error
+	go func() {
+		err = queryStructsFn(execer, dest)
+		ch <- true
+	}()
+	for {
+		select {
+		case <-time.After(execer.timeout):
+			//logger.Error("timed out!!!", "timeout", execer.timeout)
+			execer.Cancel()
+			return dat.ErrTimedout
+		case <-ch:
+			//logger.Error("doexec completed")
+			return err
+		}
+	}
+}
+
 // QueryStructs executes the query in builderand loads the resulting data into
 // a slice of structs. dest must be a pointer to a slice of pointers to structs
 //
 // Returns the number of items found (which is not necessarily the # of items
 // set)
-func queryStructs(execer *Execer, dest interface{}) error {
+func queryStructsFn(execer *Execer, dest interface{}) error {
 	fullSQL, args, blob, err := cacheOrSQL(execer)
 	if err != nil {
 		logger.Error("queryStructs.1: Could not convert to SQL", "err", err)
@@ -334,11 +502,36 @@ func queryJSONStruct(execer *Execer, dest interface{}) error {
 	return nil
 }
 
+func queryJSONBlob(execer *Execer, single bool) ([]byte, error) {
+	if execer.timeout == 0 {
+		return queryJSONBlobFn(execer, single)
+	}
+
+	ch := make(chan bool, 1)
+	var err error
+	var b []byte
+	go func() {
+		b, err = queryJSONBlobFn(execer, single)
+		ch <- true
+	}()
+	for {
+		select {
+		case <-time.After(execer.timeout):
+			//logger.Error("timed out!!!", "timeout", execer.timeout)
+			execer.Cancel()
+			return nil, dat.ErrTimedout
+		case <-ch:
+			//logger.Error("doexec completed")
+			return b, err
+		}
+	}
+}
+
 // queryJSONBlob executes the query in builder and loads the resulting data
 // into a blob. If a single item is to be returned, set single to true.
 //
 // Returns ErrNotFound if nothing was found
-func queryJSONBlob(execer *Execer, single bool) ([]byte, error) {
+func queryJSONBlobFn(execer *Execer, single bool) ([]byte, error) {
 	fullSQL, args, blob, err := cacheOrSQL(execer)
 	if err != nil {
 		return nil, err
@@ -441,7 +634,7 @@ func cacheOrSQL(execer *Execer) (sql string, args []interface{}, value []byte, e
 		}
 	}
 
-	fullSQL, args, err := execer.builder.Interpolate()
+	fullSQL, args, err := execer.Interpolate()
 	if err != nil {
 		return "", nil, nil, err
 	}
@@ -505,11 +698,36 @@ func setCache(execer *Execer, data interface{}, dataType int) {
 	}
 }
 
+func queryJSON(execer *Execer) ([]byte, error) {
+	if execer.timeout == 0 {
+		return queryJSONFn(execer)
+	}
+
+	ch := make(chan bool, 1)
+	var err error
+	var b []byte
+	go func() {
+		b, err = queryJSONFn(execer)
+		ch <- true
+	}()
+	for {
+		select {
+		case <-time.After(execer.timeout):
+			//logger.Error("timed out!!!", "timeout", execer.timeout)
+			execer.Cancel()
+			return nil, dat.ErrTimedout
+		case <-ch:
+			//logger.Error("doexec completed")
+			return b, err
+		}
+	}
+}
+
 // queryJSON executes the query in builder and loads the resulting JSON into
 // a bytes slice compatible.
 //
 // Returns ErrNotFound if nothing was found
-func queryJSON(execer *Execer) ([]byte, error) {
+func queryJSONFn(execer *Execer) ([]byte, error) {
 	fullSQL, args, blob, err := cacheOrSQL(execer)
 	if err != nil {
 		return nil, err
@@ -547,4 +765,9 @@ func queryObject(execer *Execer, dest interface{}) error {
 		return json.Unmarshal(blob, dest)
 	}
 	return nil
+}
+
+// uuid generates a UUID.
+func uuid() string {
+	return fmt.Sprintf("%s", guid.NewV4())
 }

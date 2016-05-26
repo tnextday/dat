@@ -2,6 +2,7 @@ package runner
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -16,6 +17,11 @@ type Execer struct {
 	cacheID         string
 	cacheTTL        time.Duration
 	cacheInvalidate bool
+
+	timeout time.Duration
+	// uuid is inserted into the SQL for the query to be searched
+	// in pg_stat_activity. This only happens when timeout is set.
+	queryID string
 }
 
 // NewExecer creates a new instance of Execer.
@@ -32,6 +38,54 @@ func (ex *Execer) Cache(id string, ttl time.Duration, invalidate bool) dat.Exece
 	ex.cacheTTL = ttl
 	ex.cacheInvalidate = invalidate
 	return ex
+}
+
+// Timeout sets the timeout for current query.
+func (ex *Execer) Timeout(timeout time.Duration) dat.Execer {
+	ex.timeout = timeout
+	if ex.timeout > 0 {
+		ex.queryID = uuid()
+	} else {
+		ex.queryID = ""
+	}
+	return ex
+}
+
+func datQueryID(id string) string {
+	return fmt.Sprintf("--dat:qid=%s", id)
+}
+
+func prependDatQueryID(sql string, id string) string {
+	return fmt.Sprintf("%s\n%s", datQueryID(id), sql)
+}
+
+// Cancel cancels last query with a queryID. If queryID was not set then
+// ErrInvalidOperation is returned.
+func (ex *Execer) Cancel() error {
+	if ex.queryID == "" {
+		return dat.ErrInvalidOperation
+	}
+
+	q := fmt.Sprintf(`
+	SELECT pg_cancel_backend(psa.pid)
+	FROM (
+		SELECT pid
+		FROM pg_stat_activity
+		WHERE query
+		LIKE '%s%%'
+	) psa`, datQueryID(ex.queryID))
+
+	_, err := execSQL(ex, q, nil)
+	return err
+}
+
+// Interpolate tells the associated builder to interpolate itself.
+func (ex *Execer) Interpolate() (string, []interface{}, error) {
+	sql, args, err := ex.builder.Interpolate()
+	if ex.timeout > 0 {
+		sql = prependDatQueryID(sql, ex.queryID)
+	}
+	return sql, args, err
 }
 
 // Exec executes a builder's query.
