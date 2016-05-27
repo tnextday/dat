@@ -1,6 +1,3 @@
-** The [legacy](https://github.com/mgutz/dat/tree/legacy) branch contains
-the original dat **
-
 # dat
 
 [GoDoc](https://godoc.org/github.com/mgutz/dat)
@@ -95,6 +92,8 @@ library for Go.
     ```
 
 *   Nested transactions
+
+*   Per query timeout with database cancellation logic `pg_cancel_backend`
 
 *   SQL tracing
 
@@ -615,7 +614,7 @@ func getUsers(conn runner.Connection) ([]*dto.Users, error) {
 }
 ```
 
-#### Nested Transactions
+### Nested Transactions
 
 Nested transaction logic is as follows:
 
@@ -661,6 +660,17 @@ func top() {
 }
 ```
 
+### Timeouts
+
+A timeout may be set on any `Query*` or `Exec` with the `Timeout` method. When a
+timeout is set, the query is run in a separate goroutine and should a timeout
+occur dat will cancel the query via Postgres' `pg_cancel_backend`.
+
+```go
+err := DB.Select("SELECT pg_sleep(1)").Timeout(1 * time.Millisecond).Exec()
+err == dat.ErrTimedout
+```
+
 ### Dates
 
 Use `dat.NullTime` type to properly handle nullable dates
@@ -687,8 +697,7 @@ DB.SQL("UPDATE table SET updated_at = $1", CURRENT_TIMESTAMP)
 ```
 
 `UnsafeString` is exactly that, **UNSAFE**. If you must use it, create a
-constant and **NEVER** use `UnsafeString` directly as an argument. This
-is asking for a SQL injection attack
+constant and **NEVER** use `UnsafeString` directly as an argument like this
 
 ```go
 DB.SQL("UPDATE table SET updated_at = $1", dat.UnsafeString(someVar))
@@ -743,12 +752,11 @@ b, err := DB.
     Cache("states", 365 * 24 * time.Hour, false).
     QueryJSON()
 
-// Cache states query for a year using the hash value of the SQL as the ID.
+// Without a key, the checksum of the query is used as the cache key.
+// In this example, the interpolated SQL  will contain their user_name
+// (if EnableInterpolation is true) effectively caching each user.
 //
-// While this is not as efficient, the checksum has to be calculated
-// for each query, it is more flexible. In this example, the interpolated SQL
-// will contain ther user_name (if EnableInterpolation is true)
-// effectively caching each user.
+// cacheID == checksum("SELECT * FROM users WHERE user_name='mario'")
 b, err := DB.
     SQL(`SELECT * FROM users WHERE user_name = $1`, user).
     Cache("", 365 * 24 *  time.Hour, false).

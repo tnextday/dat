@@ -6,8 +6,6 @@ import (
 	"testing"
 
 	"gopkg.in/stretchr/testify.v1/assert"
-
-	"github.com/mgutz/logxi/v1"
 )
 
 func TestTransactionReal(t *testing.T) {
@@ -125,8 +123,6 @@ func nestedNestedRollback(c Connection) error {
 }
 
 func TestRollbackWithNestedCommit(t *testing.T) {
-	log.Suppress(true)
-	defer log.Suppress(false)
 	installFixtures()
 	tx, err := testDB.Begin()
 	assert.NoError(t, err)
@@ -146,8 +142,6 @@ func TestRollbackWithNestedCommit(t *testing.T) {
 }
 
 func TestCommitWithNestedCommit(t *testing.T) {
-	log.Suppress(true)
-	defer log.Suppress(false)
 	installFixtures()
 	tx, err := testDB.Begin()
 	assert.NoError(t, err)
@@ -167,8 +161,6 @@ func TestCommitWithNestedCommit(t *testing.T) {
 }
 
 func TestCommitWithNestedNestedCommit(t *testing.T) {
-	log.Suppress(true)
-	defer log.Suppress(false)
 	installFixtures()
 	tx, err := testDB.Begin()
 	assert.NoError(t, err)
@@ -196,8 +188,6 @@ func TestCommitWithNestedNestedCommit(t *testing.T) {
 }
 
 func TestRollbackWithNestedRollback(t *testing.T) {
-	log.Suppress(true)
-	defer log.Suppress(false)
 	installFixtures()
 	tx, err := testDB.Begin()
 	assert.NoError(t, err)
@@ -216,8 +206,6 @@ func TestRollbackWithNestedRollback(t *testing.T) {
 }
 
 func TestCommitWithNestedRollback(t *testing.T) {
-	log.Suppress(true)
-	defer log.Suppress(false)
 	installFixtures()
 	tx, err := testDB.Begin()
 	assert.NoError(t, err)
@@ -236,8 +224,6 @@ func TestCommitWithNestedRollback(t *testing.T) {
 }
 
 func TestCommitWithNestedNestedRollback(t *testing.T) {
-	log.Suppress(true)
-	defer log.Suppress(false)
 	installFixtures()
 	tx, err := testDB.Begin()
 	assert.NoError(t, err)
@@ -256,8 +242,6 @@ func TestCommitWithNestedNestedRollback(t *testing.T) {
 }
 
 func TestErrorInBeginIfRollbacked(t *testing.T) {
-	log.Suppress(true)
-	defer log.Suppress(false)
 	installFixtures()
 	tx, err := testDB.Begin()
 	assert.NoError(t, err)

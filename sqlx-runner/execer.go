@@ -51,6 +51,8 @@ func (ex *Execer) Timeout(timeout time.Duration) dat.Execer {
 	return ex
 }
 
+const queryIDPrefix = "--dat:qid="
+
 func datQueryID(id string) string {
 	return fmt.Sprintf("--dat:qid=%s", id)
 }

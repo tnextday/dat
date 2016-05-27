@@ -49,6 +49,18 @@ func toOutputStr(args []interface{}) string {
 }
 
 func logSQLError(err error, msg string, statement string, args []interface{}) error {
+	// if pe, ok := err.(*pq.Error); ok {
+	// 	if pe.Code == "57014" {
+	// 		// dat initiates the cancellation of a query on timeout.  Coerce the error into
+	// 		// a timedout error so the end user does not see a false error in the logs.
+	// 		if strings.HasPrefix(statement, queryIDPrefix) {
+	// 			return dat.ErrTimedout
+	// 		}
+
+	// 		return logger.Error(msg, "err", err, "sql", statement, "args", toOutputStr(args))
+	// 	}
+	// }
+
 	if err == sql.ErrNoRows {
 		if dat.Strict {
 			return logger.Warn(msg, "err", err, "sql", statement, "args", toOutputStr(args))
@@ -58,6 +70,7 @@ func logSQLError(err error, msg string, statement string, args []interface{}) er
 		}
 		return err
 	}
+
 	return logger.Error(msg, "err", err, "sql", statement, "args", toOutputStr(args))
 }
 
@@ -126,7 +139,7 @@ func execFn(execer *Execer) (sql.Result, error) {
 		result, err = execer.database.Exec(fullSQL, args...)
 	}
 	if err != nil {
-		return nil, logSQLError(err, "execFn.30", fullSQL, args)
+		return nil, logSQLError(err, "execFn.30:"+fmt.Sprintf("%T", err), fullSQL, args)
 	}
 
 	return result, nil

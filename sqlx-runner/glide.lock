@@ -12,10 +12,6 @@ imports:
   version: a7f971fe8ea891a1a74ddb40c623f5722e28e8a8
   subpackages:
   - reflectx
-- name: github.com/lib/pq
-  version: ee1442bda7bd1b6a84e913bdb421cb1874ec629d
-  subpackages:
-  - oid
 - name: github.com/mattn/go-colorable
   version: e8a10ddc7d2a7fe255f6fd7f501070a4cb62c183
 - name: github.com/mattn/go-isatty
