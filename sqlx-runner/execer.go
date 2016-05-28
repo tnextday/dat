@@ -92,7 +92,7 @@ func (ex *Execer) Interpolate() (string, []interface{}, error) {
 
 // Exec executes a builder's query.
 func (ex *Execer) Exec() (*dat.Result, error) {
-	res, err := exec(ex)
+	res, err := ex.exec()
 	if err != nil {
 		return nil, err
 	}
@@ -105,44 +105,44 @@ func (ex *Execer) Exec() (*dat.Result, error) {
 
 // Queryx executes builder's query and returns rows.
 func (ex *Execer) Queryx() (*sqlx.Rows, error) {
-	return query(ex)
+	return ex.query()
 }
 
 // QueryScalar executes builder's query and scans returned row into destinations.
 func (ex *Execer) QueryScalar(destinations ...interface{}) error {
-	return queryScalar(ex, destinations...)
+	return ex.queryScalar(destinations...)
 }
 
 // QuerySlice executes builder's query and builds a slice of values from each row, where
 // each row only has one column.
 func (ex *Execer) QuerySlice(dest interface{}) error {
-	return querySlice(ex, dest)
+	return ex.querySlice(dest)
 }
 
 // QueryStruct executes builders' query and scans the result row into dest.
 func (ex *Execer) QueryStruct(dest interface{}) error {
 	if _, ok := ex.builder.(*dat.SelectDocBuilder); ok {
-		err := queryJSONStruct(ex, dest)
+		err := ex.queryJSONStruct(dest)
 		return err
 	}
-	return queryStruct(ex, dest)
+	return ex.queryStruct(dest)
 }
 
 // QueryStructs executes builders' query and scans each row as an item in a slice of structs.
 func (ex *Execer) QueryStructs(dest interface{}) error {
 	if _, ok := ex.builder.(*dat.SelectDocBuilder); ok {
-		err := queryJSONStructs(ex, dest)
+		err := ex.queryJSONStructs(dest)
 		return err
 	}
 
-	return queryStructs(ex, dest)
+	return ex.queryStructs(dest)
 }
 
 // QueryObject wraps the builder's query within a `to_json` then executes and unmarshals
 // the result into dest.
 func (ex *Execer) QueryObject(dest interface{}) error {
 	if _, ok := ex.builder.(*dat.SelectDocBuilder); ok {
-		b, err := queryJSONBlob(ex, false)
+		b, err := ex.queryJSONBlob(false)
 		if err != nil {
 			return err
 		}
@@ -152,15 +152,15 @@ func (ex *Execer) QueryObject(dest interface{}) error {
 		return json.Unmarshal(b, dest)
 	}
 
-	return queryObject(ex, dest)
+	return ex.queryObject(dest)
 }
 
 // QueryJSON wraps the builder's query within a `to_json` then executes and returns
 // the JSON []byte representation.
 func (ex *Execer) QueryJSON() ([]byte, error) {
 	if _, ok := ex.builder.(*dat.SelectDocBuilder); ok {
-		return queryJSONBlob(ex, false)
+		return ex.queryJSONBlob(false)
 	}
 
-	return queryJSON(ex)
+	return ex.queryJSON()
 }

@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/mgutz/jo/v1"
-	"github.com/stretchr/testify/assert"
 	"gopkg.in/mgutz/dat.v1"
+	"gopkg.in/stretchr/testify.v1/assert"
 )
 
 type TimeoutPerson struct {
