@@ -18,9 +18,11 @@ type Execer struct {
 	cacheTTL        time.Duration
 	cacheInvalidate bool
 
+	// timeout is the time to wait for a query before cancelling it, 0 means forever
 	timeout time.Duration
-	// uuid is inserted into the SQL for the query to be searched
-	// in pg_stat_activity. This only happens when timeout is set.
+
+	// uuid is prepended into the SQL for the query to be searched
+	// in pg_stat_activity, used by timeout logic
 	queryID string
 }
 
@@ -43,7 +45,7 @@ func (ex *Execer) Cache(id string, ttl time.Duration, invalidate bool) dat.Exece
 // Timeout sets the timeout for current query.
 func (ex *Execer) Timeout(timeout time.Duration) dat.Execer {
 	ex.timeout = timeout
-	if ex.timeout > 0 {
+	if timeout > 0 {
 		ex.queryID = uuid()
 	} else {
 		ex.queryID = ""
@@ -77,8 +79,11 @@ func (ex *Execer) Cancel() error {
 		LIKE '%s%%'
 	) psa`, datQueryID(ex.queryID))
 
-	_, err := execSQL(ex, q, nil)
-	return err
+	_, err := ex.execSQL(q, nil)
+	if err != nil {
+		logger.Error("While trying to cancel a query", err)
+	}
+	return dat.ErrTimedout
 }
 
 // Interpolate tells the associated builder to interpolate itself.

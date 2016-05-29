@@ -94,28 +94,6 @@ func logExecutionTime(start time.Time, sql string, args []interface{}) {
 	}
 }
 
-func (ex *Execer) cancelIfTimeout() chan error {
-	ch := make(chan error, 1)
-	if ex.timeout == 0 {
-		ch <- dat.ErrInvalidOperation
-		return ch
-	}
-
-	go func() {
-		<-time.After(ex.timeout)
-		logger.Debug("Query timed out, sending cancellation", "timeout", ex.timeout)
-		err := ex.Cancel()
-		if err != nil {
-			// it might be possible for a query to finish in between
-			// the ex.timeout expiring and before pg_cancel_backend executes
-			// on postgres server.
-			logger.Error("While cancelling query", "err", err)
-		}
-		ch <- dat.ErrTimedout
-	}()
-	return ch
-}
-
 func (ex *Execer) exec() (sql.Result, error) {
 	if ex.timeout == 0 {
 		return ex.execFn()
@@ -130,8 +108,8 @@ func (ex *Execer) exec() (sql.Result, error) {
 	}()
 	for {
 		select {
-		case cerr := <-ex.cancelIfTimeout():
-			return nil, cerr
+		case <-time.After(ex.timeout):
+			return nil, ex.Cancel()
 		case <-ch:
 			return result, err
 		}
@@ -158,12 +136,12 @@ func (ex *Execer) execFn() (sql.Result, error) {
 
 // execSQL executes SQL. DO NOT add timeout logic here since this is called
 // by Cancel when a timeout occurs.
-func execSQL(execer *Execer, fullSQL string, args []interface{}) (sql.Result, error) {
+func (ex *Execer) execSQL(fullSQL string, args []interface{}) (sql.Result, error) {
 	defer logExecutionTime(time.Now(), fullSQL, args)
 
 	var result sql.Result
 	var err error
-	result, err = execer.database.Exec(fullSQL, args...)
+	result, err = ex.database.Exec(fullSQL, args...)
 	if err != nil {
 		return nil, logSQLError(err, "execSQL.30", fullSQL, args)
 	}
@@ -185,8 +163,9 @@ func (ex *Execer) query() (*sqlx.Rows, error) {
 	}()
 	for {
 		select {
-		case cerr := <-ex.cancelIfTimeout():
-			return nil, cerr
+		case <-time.After(ex.timeout):
+			ex.Cancel()
+			return nil, dat.ErrTimedout
 		case <-ch:
 			//logger.Error("doexec completed")
 			return rows, err
@@ -223,8 +202,8 @@ func (ex *Execer) queryScalar(destinations ...interface{}) error {
 	}()
 	for {
 		select {
-		case cerr := <-ex.cancelIfTimeout():
-			return cerr
+		case <-time.After(ex.timeout):
+			return ex.Cancel()
 		case <-ch:
 			return err
 		}
@@ -286,8 +265,8 @@ func (ex *Execer) querySlice(dest interface{}) error {
 	}()
 	for {
 		select {
-		case cerr := <-ex.cancelIfTimeout():
-			return cerr
+		case <-time.After(ex.timeout):
+			return ex.Cancel()
 		case <-ch:
 			return err
 		}
@@ -382,8 +361,8 @@ func (ex *Execer) queryStruct(dest interface{}) error {
 	}()
 	for {
 		select {
-		case cerr := <-ex.cancelIfTimeout():
-			return cerr
+		case <-time.After(ex.timeout):
+			return ex.Cancel()
 		case <-ch:
 			return err
 		}
@@ -431,8 +410,8 @@ func (ex *Execer) queryStructs(dest interface{}) error {
 	}()
 	for {
 		select {
-		case cerr := <-ex.cancelIfTimeout():
-			return cerr
+		case <-time.After(ex.timeout):
+			return ex.Cancel()
 		case <-ch:
 			return err
 		}
@@ -498,8 +477,8 @@ func (ex *Execer) queryJSONBlob(single bool) ([]byte, error) {
 	}()
 	for {
 		select {
-		case cerr := <-ex.cancelIfTimeout():
-			return nil, cerr
+		case <-time.After(ex.timeout):
+			return nil, ex.Cancel()
 		case <-ch:
 			return b, err
 		}
@@ -686,8 +665,8 @@ func (ex *Execer) queryJSON() ([]byte, error) {
 	}()
 	for {
 		select {
-		case cerr := <-ex.cancelIfTimeout():
-			return nil, cerr
+		case <-time.After(ex.timeout):
+			return nil, ex.Cancel()
 		case <-ch:
 			//logger.Error("doexec completed")
 			return b, err
