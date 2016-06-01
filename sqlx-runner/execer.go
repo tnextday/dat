@@ -26,6 +26,8 @@ type Execer struct {
 	queryID string
 }
 
+const queryIDPrefix = "--dat:qid="
+
 // NewExecer creates a new instance of Execer.
 func NewExecer(database database, builder dat.Builder) *Execer {
 	return &Execer{
@@ -52,8 +54,6 @@ func (ex *Execer) Timeout(timeout time.Duration) dat.Execer {
 	}
 	return ex
 }
-
-const queryIDPrefix = "--dat:qid="
 
 func datQueryID(id string) string {
 	return fmt.Sprintf("--dat:qid=%s", id)

@@ -15,11 +15,11 @@ func TestTransactionReal(t *testing.T) {
 	assert.NoError(t, err)
 
 	var id int64
-	tx.InsertInto("people").Columns("name", "email").
+	err = tx.InsertInto("people").Columns("name", "email").
 		Values("Barack", "obama@whitehouse.gov").
 		Returning("id").
 		QueryScalar(&id)
-
+	assert.NoError(t, err)
 	assert.True(t, id > 0)
 
 	var person Person
@@ -63,10 +63,13 @@ func nestedCommit(c Connection) error {
 
 	// this will commit
 	var id int64
-	tx.InsertInto("people").Columns("name", "email").
+	err = tx.InsertInto("people").Columns("name", "email").
 		Values("Mario", "mario@mgutz.com").
 		Returning("id").
 		QueryScalar(&id)
+	if err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
@@ -79,10 +82,13 @@ func nestedNestedCommit(c Connection) error {
 
 	// this will commit
 	var id int64
-	tx.InsertInto("people").Columns("name", "email").
+	err = tx.InsertInto("people").Columns("name", "email").
 		Values("Mario2", "mario2@mgutz.com").
 		Returning("id").
 		QueryScalar(&id)
+	if err != nil {
+		return err
+	}
 	err = tx.Commit()
 	if err != nil {
 		return err
@@ -99,11 +105,11 @@ func nestedRollback(c Connection) error {
 
 	// this will commit
 	var id int64
-	tx.InsertInto("people").Columns("name", "email").
+	err = tx.InsertInto("people").Columns("name", "email").
 		Values("Mario", "mario@mgutz.com").
 		Returning("id").
 		QueryScalar(&id)
-	return nil
+	return err
 }
 
 func nestedNestedRollback(c Connection) error {
@@ -115,10 +121,13 @@ func nestedNestedRollback(c Connection) error {
 
 	// this will commit
 	var id int64
-	tx.InsertInto("people").Columns("name", "email").
+	err = tx.InsertInto("people").Columns("name", "email").
 		Values("Mario", "mario@mgutz.com").
 		Returning("id").
 		QueryScalar(&id)
+	if err != nil {
+		return err
+	}
 	return nestedRollback(tx)
 }
 

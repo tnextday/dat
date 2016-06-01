@@ -22,7 +22,7 @@ func TestTimeoutExec(t *testing.T) {
 	// test no timeout
 	result, err := testDB.SQL("SELECT 0").Timeout(3 * time.Second).Exec()
 	assert.Equal(t, int64(1), result.RowsAffected)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestTimeoutScalar(t *testing.T) {
@@ -33,6 +33,7 @@ func TestTimeoutScalar(t *testing.T) {
 
 	// test no timeout
 	err = testDB.SQL("SELECT 1 as k").Timeout(10 * time.Millisecond).QueryScalar(&n)
+	assert.NoError(t, err)
 	assert.Equal(t, 1, n)
 }
 
@@ -44,6 +45,7 @@ func TestTimeoutSlice(t *testing.T) {
 
 	// test no timeout
 	err = testDB.SQL("SELECT * FROM generate_series(1, 3)").Timeout(1 * time.Second).QuerySlice(&arr)
+	assert.NoError(t, err)
 	assert.Equal(t, []int{1, 2, 3}, arr)
 }
 
@@ -55,6 +57,7 @@ func TestTimeoutStruct(t *testing.T) {
 
 	// test no timeout
 	err = testDB.SQL("SELECT 'john' as name, 10 as age").Timeout(1 * time.Second).QueryStruct(&person)
+	assert.NoError(t, err)
 	assert.Equal(t, "john", person.Name)
 	assert.Equal(t, 10, person.Age)
 }
@@ -67,6 +70,7 @@ func TestTimeoutStructs(t *testing.T) {
 
 	// test no timeout
 	err = testDB.SQL("SELECT 'john' as name, 10 as age UNION ALL SELECT 'jane' as name, 11 as age").Timeout(1 * time.Second).QueryStructs(&people)
+	assert.NoError(t, err)
 	assert.Equal(t, 2, len(people))
 	assert.Equal(t, "john", people[0].Name)
 	assert.Equal(t, "jane", people[1].Name)
@@ -80,6 +84,7 @@ func TestTimeoutObject(t *testing.T) {
 
 	// test no timeout
 	err = testDB.SQL("SELECT 'john' as name, 10 as age LIMIT 1").Timeout(1 * time.Second).QueryObject(&person)
+	assert.NoError(t, err)
 	assert.Equal(t, "john", person.AsString("[0].name"))
 	assert.Equal(t, 10, person.AsInt("[0].age"))
 }
@@ -91,6 +96,7 @@ func TestTimeoutJSON(t *testing.T) {
 
 	// test no timeout
 	b, err = testDB.SQL("SELECT 'john' as name, 10 as age LIMIT 1").Timeout(1 * time.Second).QueryJSON()
+	assert.NoError(t, err)
 	obj, _ := jo.NewFromBytes(b)
 	assert.Equal(t, "john", obj.AsString("[0].name"))
 	assert.Equal(t, 10, obj.AsInt("[0].age"))

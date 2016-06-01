@@ -164,8 +164,7 @@ func (ex *Execer) query() (*sqlx.Rows, error) {
 	for {
 		select {
 		case <-time.After(ex.timeout):
-			ex.Cancel()
-			return nil, dat.ErrTimedout
+			return nil, ex.Cancel()
 		case <-ch:
 			//logger.Error("doexec completed")
 			return rows, err

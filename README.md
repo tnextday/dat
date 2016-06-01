@@ -2,19 +2,18 @@
 
 [GoDoc](https://godoc.org/github.com/mgutz/dat)
 
-`dat` (Data Access Toolkit) is a fast, lightweight and intuitive Postgres
-library for Go.
+`dat` (Data Access Toolkit) is a fast, lightweight Postgres library for Go.
 
-*   Focused on Postgres. See `Insect`, `Upsert`, `SelectDoc`, `QueryJSON`.
+*   Focused on Postgres. See `Insect`, `Upsert`, `SelectDoc`, `QueryJSON`
 
-*   Built on a solid foundation [sqlx](https://github.com/jmoiron/sqlx).
+*   Built on a solid foundation [sqlx](https://github.com/jmoiron/sqlx)
 
     ```go
     // child DB is *sqlx.DB
     DB.DB.Queryx(`SELECT * FROM users`)
     ```
 
-*   SQL and backtick friendly.
+*   SQL and backtick friendly
 
     ```go
     DB.SQL(`SELECT * FROM people LIMIT 10`).QueryStructs(&people)
@@ -95,9 +94,7 @@ library for Go.
 
 *   Per query timeout with database cancellation logic `pg_cancel_backend`
 
-*   SQL tracing
-
-*   Slow query logging
+*   SQL and slow query logging
 
 *   Performant
 
@@ -565,7 +562,7 @@ from the underlying SQL driver's pool
 For one-off operations, use `DB` directly
 
 ```go
-err := DB.SQL(...).QueryStruct(&post)
+err := DB.SQL(sql).QueryStruct(&post)
 ```
 
 For multiple operations, create a `Tx` transaction.
@@ -596,8 +593,7 @@ func PostsIndex(rw http.ResponseWriter, r *http.Request) {
 }
 ```
 
-`DB` and `Tx` implement `runner.Connection` interface to facilitate
-keeping code DRY
+`DB` and `Tx` implement `runner.Connection` interface to keep code DRY
 
 ```
 func getUsers(conn runner.Connection) ([]*dto.Users, error) {
@@ -605,7 +601,7 @@ func getUsers(conn runner.Connection) ([]*dto.Users, error) {
         SELECT *
         FROM users
     `
-    var users dto.Users
+    var users []*dto.Users
     err := conn.SQL(sql).QueryStructs(&users)
     if err != nil {
         return err
@@ -636,7 +632,7 @@ func nested(conn runner.Connection) error {
     }
     defer tx.AutoRollback()
 
-    _, err := tx.SQL(`INSERT INTO users (email) values $1`, 'me@home.com').Exec()
+    _, err := tx.SQL(`INSERT INTO users (email) values $1`, "me@home.com").Exec()
     if err != nil {
         return err
     }
@@ -799,11 +795,10 @@ db.Exec(
 )
 ```
 
-is sent to the database with inlined args bypassing
-prepared statement logic in the lib/pq layer.
+is sent to the database with inlined args bypassing prepared statement logic in
+the lib/pq layer
 
-sql
-```
+```sql
 "INSERT INTO (a, b, c, d) VALUES (1, 2, 3, 4)"
 ```
 

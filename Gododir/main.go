@@ -80,25 +80,7 @@ func tasks(p *do.Project) {
 	})
 
 	p.Task("lint", nil, func(c *do.Context) {
-		c.Bash(`
-		echo Directory=.
-		golint
-
-		cd sqlx-runner
-		echo
-		echo Directory=sqlx-runner
-		golint
-
-		cd ../kvs
-		echo
-		echo Directory=kvs
-		golint
-
-		cd ../postgres
-		echo
-		echo Directory=postgres
-		golint
-		`)
+		c.Bash("gometalinter --deadline=2m -D gotype -D dupl ./...")
 	})
 
 	p.Task("mocks", nil, func(c *do.Context) {
